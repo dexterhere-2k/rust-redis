@@ -21,7 +21,7 @@ async fn main() {
                     Ok(0) => break,
                     Ok(_) => {
                         if stream.write_all(b"+PONG\r\n").await.is_err() {
-                            break;
+                            // break;
                         }
                     }
                     Err(_) => {
