@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
-use std::{io::Write, net::TcpListener};
+use std::{
+    io::{Read, Write},
+    net::TcpListener,
+};
 
 fn main() {
     // You can use print statements as follows for debugging, they'll be visible when running tests.
@@ -10,18 +13,21 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
     for stream in listener.incoming() {
-        for _ in stream {
-            match stream {
-                Ok(mut stream) => {
-                    stream.write_all(b"+PONG\r\n").unwrap();
-                    // stream.flush().unwrap();
-                    // stream.write_all(b"+PING\r\n").unwrap();
-                    // stream.flush().unwrap();
-                    // println!("accepted new connection");
+        match stream {
+            Ok(mut stream) => loop {
+                let mut buffer = [0; 512];
+                match stream.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        stream.write_all(b"+PONG\r\n").unwrap();
+                    }
+                    Err(_) => {
+                        break;
+                    }
                 }
-                Err(e) => {
-                    println!("error: {}", e);
-                }
+            },
+            Err(e) => {
+                println!("error: {}", e);
             }
         }
     }
