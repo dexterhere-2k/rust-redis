@@ -13,6 +13,9 @@ fn main() {
         match stream {
             Ok(mut stream) => {
                 stream.write_all(b"+PONG\r\n").unwrap();
+                stream.flush().unwrap();
+                stream.write_all(b"+PING\r\n").unwrap();
+                stream.flush().unwrap();
                 // println!("accepted new connection");
             }
             Err(e) => {
