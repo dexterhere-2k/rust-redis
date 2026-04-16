@@ -20,9 +20,7 @@ async fn main() {
                 match stream.read(&mut buffer).await {
                     Ok(0) => break,
                     Ok(_) => {
-                        if stream.write_all(b"+PONG\r\n").await.is_err() {
-                            // break;
-                        }
+                        stream.write_all(b"+PONG\r\n").await.is_err();
                     }
                     Err(_) => {
                         break;
