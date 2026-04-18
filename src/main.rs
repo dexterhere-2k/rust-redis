@@ -23,8 +23,24 @@ async fn main() {
                         let mut buffer = [0; 512];
                         match stream.read(&mut buffer).await {
                             Ok(0) => break,
-                            Ok(_) => {
-                                stream.write_all(b"+PONG\r\n").await.is_err();
+                            Ok(n) => {
+                                let request = String::from_utf8_lossy(&buffer[..n]);
+                                let parts: Vec<&str> = request.split("\r\n").collect();
+                                if parts.len() >= 3 {
+                                    let cmd = parts[2].to_uppercase();
+                                    match cmd.as_str() {
+                                        "PING" => {
+                                            let response = "+PONG\r\n";
+                                            stream.write_all(response.as_bytes()).await.err();
+                                        }
+                                        "ECHO" => {
+                                            let arg = parts[4];
+                                            let response = format!("${}\r\n{}\r\n", arg.len(), arg);
+                                            stream.write_all(response.as_bytes()).await.is_err();
+                                        }
+                                        _ => {}
+                                    }
+                                }
                             }
                             Err(_) => {
                                 break;
