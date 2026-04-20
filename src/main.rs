@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::vec;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
@@ -111,21 +112,26 @@ async fn main() {
                                         "RPUSH" => {
                                             if parts.len() > 7 {
                                                 let key = parts[4].to_string();
-                                                let value = parts[6].to_string();
+                                                let values = parts[6..]
+                                                    .iter()
+                                                    .step_by(2)
+                                                    .map(|s| s.to_string())
+                                                    .collect::<Vec<_>>();
                                                 let response = {
                                                     let mut val = data_lock.lock().unwrap();
                                                     let new_len =
-                                                        if let Some((DataType::List(list), ttl)) =
+                                                        if let Some((DataType::List(list), _ttl)) =
                                                             val.get_mut(&key)
                                                         {
-                                                            list.push(value);
+                                                            list.extend(values);
                                                             list.len()
                                                         } else {
+                                                            let len = values.len();
                                                             val.insert(
                                                                 key,
-                                                                (DataType::List(vec![value]), None),
+                                                                (DataType::List(values), None),
                                                             );
-                                                            1
+                                                            len
                                                         };
                                                     format!(":{}\r\n", new_len)
                                                 };
