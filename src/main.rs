@@ -5,11 +5,16 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
 
+#[derive(Clone, Debug)]
+enum DataType {
+    Text(String),
+    List(Vec<String>),
+}
 #[tokio::main]
 async fn main() {
     println!("Logs from your program will appear here!");
 
-    let data: Arc<Mutex<HashMap<String, (String, Option<Instant>)>>> =
+    let data: Arc<Mutex<HashMap<String, (DataType, Option<Instant>)>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
@@ -60,7 +65,10 @@ async fn main() {
                                                     }
                                                 }
                                             }
-                                            data_lock.lock().unwrap().insert(key, (value, ttl));
+                                            data_lock
+                                                .lock()
+                                                .unwrap()
+                                                .insert(key, (DataType::Text(value), ttl));
                                             let response = "+OK\r\n";
                                             let _ = stream.write_all(response.as_bytes()).await;
                                         }
@@ -71,29 +79,56 @@ async fn main() {
                                                 let response = {
                                                     let mut val = data_lock.lock().unwrap();
                                                     if let Some((value, ttl)) = val.get(key) {
-                                                        if let Some(exp_time) = ttl {
-                                                            if Instant::now() > *exp_time {
-                                                                val.remove(key);
-                                                                String::from("$-1\r\n")
-                                                            } else {
-                                                                format!(
-                                                                    "${}\r\n{}\r\n",
-                                                                    value.len(),
-                                                                    value
-                                                                )
-                                                            }
+                                                        let is_expired = if let Some(exp_time) = ttl
+                                                        {
+                                                            Instant::now() > *exp_time
                                                         } else {
-                                                            format!(
-                                                                "${}\r\n{}\r\n",
-                                                                value.len(),
-                                                                value
-                                                            )
+                                                            false
+                                                        };
+                                                        if is_expired {
+                                                            val.remove(key);
+                                                            String::from("$-1\r\n")
+                                                        } else {
+                                                            match value {
+                                                                DataType::Text(text) => {
+                                                                    format!(
+                                                                        "${}\r\n{}\r\n",
+                                                                        text.len(),
+                                                                        text
+                                                                    )
+                                                                }
+                                                                _ => String::from("Wrong type"),
+                                                            }
                                                         }
                                                     } else {
                                                         String::from("$-1\r\n")
                                                     }
                                                 };
 
+                                                let _ = stream.write_all(response.as_bytes()).await;
+                                            }
+                                        }
+                                        "RPUSH" => {
+                                            if parts.len() > 7 {
+                                                let key = parts[4].to_string();
+                                                let value = parts[6].to_string();
+                                                let response = {
+                                                    let mut val = data_lock.lock().unwrap();
+                                                    let new_len =
+                                                        if let Some((DataType::List(list), ttl)) =
+                                                            val.get_mut(&key)
+                                                        {
+                                                            list.push(value);
+                                                            list.len()
+                                                        } else {
+                                                            val.insert(
+                                                                key,
+                                                                (DataType::List(vec![value]), None),
+                                                            );
+                                                            1
+                                                        };
+                                                    format!(":{}\r\n", new_len)
+                                                };
                                                 let _ = stream.write_all(response.as_bytes()).await;
                                             }
                                         }
